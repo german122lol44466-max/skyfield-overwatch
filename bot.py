@@ -128,6 +128,7 @@ class CommandTree(app_commands.CommandTree):
 class Unit(commands.Bot):
     async def setup_hook(self):
         self.add_view(Panel())
+        self.add_view(DevelopmentPanel())
         gid = os.getenv('GUILD_ID')
         if gid:
             guild = discord.Object(id=int(gid))
@@ -199,6 +200,9 @@ intents.members = True
 bot = Unit(tree_cls=CommandTree, command_prefix=commands.when_mentioned, intents=intents, allowed_mentions=discord.AllowedMentions.none())
 
 
+from development import install as install_development
+DevelopmentPanel = install_development(bot, store, ROOT)
+
 @bot.tree.command(name='setup', description='Настроить каналы игр, команд, приглашений и награду')
 @app_commands.guild_only()
 @app_commands.default_permissions(manage_guild=True)
@@ -206,6 +210,9 @@ bot = Unit(tree_cls=CommandTree, command_prefix=commands.when_mentioned, intents
 async def setup(i: discord.Interaction, count: discord.TextChannel, words: discord.TextChannel, wait: discord.TextChannel, commands_channel: discord.TextChannel, invites: discord.TextChannel, invite_points: app_commands.Range[int, 1, 10000] = 10):
     if not i.guild.me.guild_permissions.manage_guild:
         await i.response.send_message('Для учёта приглашений выдай боту право «Управлять сервером».', ephemeral=True); return
+    with store.edit(i.guild_id) as s: development = s.get('development', {})
+    if any(c.id in (development.get('panel_channel'), development.get('updates_channel')) for c in (count, words, wait)):
+        await i.response.send_message('Игровые каналы не должны совпадать с каналами разработки.', ephemeral=True); return
     channels = [count, words, wait, commands_channel, invites]
     if len({c.id for c in channels}) != 5:
         await i.response.send_message('Нужны пять разных каналов.', ephemeral=True); return
@@ -308,7 +315,7 @@ async def reset(i: discord.Interaction, game: app_commands.Choice[str], confirm:
 @bot.tree.command(name='help', description='Команды и правила игр Skyfield')
 @app_commands.guild_only()
 async def help_cmd(i: discord.Interaction):
-    await i.response.send_message(embed=card('СПРАВОЧНИК UNIT', '**Счёт:** каждое новое сообщение в канале — ход. 1, 2.., 3... или 5-2; разрешены + − * / % и скобки. Ошибка, текст или два хода подряд сбрасывают счёт. Удаление и редактирование не отменяют ход.\n\n**Слова:** русские нарицательные существительные в начальной форме. Без повторов; ходят по очереди. Ё=Е, конечные Ь/Ъ/Ы пропускаются. Ошибка не сбрасывает раунд. Словарь может не знать редкие слова.\n\n**Ожидание:** «Жду сервер день 1», завтра — день 2. Один раз в календарный день по Москве; пропуск дня начинает серию с 1.\n\n**Репутация:** /rep, один голос в 24 часа; себе и ботам нельзя.\n\n**Приглашения:** приглашай по своей обычной постоянной ссылке. Очки и число приглашённых — в /profile и /top. Повторные входы и неопределённые приглашения не оплачиваются.\n\n**Досье:** /profile, /bio, /stats, /top.\n**Аркада:** /snake, /pong — один клик = один шаг, Pong одиночный.\n**Администратор:** /setup, /panel, /reset.'), ephemeral=True)
+    await i.response.send_message(embed=card('СПРАВОЧНИК UNIT', '**Счёт:** каждое новое сообщение в канале — ход. 1, 2.., 3... или 5-2; разрешены + − * / % и скобки. Ошибка, текст или два хода подряд сбрасывают счёт. Удаление и редактирование не отменяют ход.\n\n**Слова:** русские нарицательные существительные в начальной форме. Без повторов; ходят по очереди. Ё=Е, конечные Ь/Ъ/Ы пропускаются. Ошибка не сбрасывает раунд. Словарь может не знать редкие слова.\n\n**Ожидание:** «Жду сервер день 1», завтра — день 2. Один раз в календарный день по Москве; пропуск дня начинает серию с 1.\n\n**Репутация:** /rep, один голос в 24 часа; себе и ботам нельзя.\n\n**Приглашения:** приглашай по своей обычной постоянной ссылке. Очки и число приглашённых — в /profile и /top. Повторные входы и неопределённые приглашения не оплачиваются.\n\n**Досье:** /profile, /bio, /stats, /top.\n**Аркада:** /snake, /pong — один клик = один шаг, Pong одиночный.\n**Разработка:** /dev_setup — панель подписки и каналы; /dev_update — новость с картинкой и необязательным пингом.\n**Администратор:** /setup, /panel, /reset.'), ephemeral=True)
 
 
 @bot.tree.error
